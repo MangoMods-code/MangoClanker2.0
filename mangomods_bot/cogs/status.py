@@ -33,11 +33,11 @@ class StatusPanel(commands.GroupCog, name="status"):
     """
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.products = JSONStore("/data/products.json", {
+        self.products = JSONStore("data/products.json", {
             "products": {},
             "meta": {"last_updated_by": None, "last_updated_at": None}
         })
-        self.panels = JSONStore("/data/panels.json", {
+        self.panels = JSONStore("data/panels.json", {
             "ticket_panel": None,
             "status_panel": None
         })
@@ -142,7 +142,7 @@ class StatusCommands(commands.Cog):
         await self.products.write(data)
 
     async def _refresh_status_panel(self) -> None:
-        cog = self.bot.get_cog("StatusPanel")
+        cog = self.bot.get_cog("status")
         # GroupCog name is class name unless overridden; discord.py uses class name by default.
         # We added StatusPanel as a cog, so we can fetch by class name.
         if cog and hasattr(cog, "refresh_panel"):
