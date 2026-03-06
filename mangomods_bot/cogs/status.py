@@ -13,9 +13,10 @@ from mangomods_bot.utils.misc import iso_now, pretty_dt
 
 STATUS_MAP = {
     "undetected": ("🟢", "Undetected — Safe to use"),
-    "risk": ("🟠", "Use at Own Risk — Bans Reported."),
+    "risk": ("🟠", "Use at Own Risk — Bans Reported"),
     "detected": ("🔴", "Detected — Do not use, Updating"),
-    "testing": ("🔵", "Testing — Integrity testing in progress"),
+    "testing": ("⚪️", "Testing — Integrity testing in progress"),
+    "revokes": ("🔵", "0/5 Revokes - These are tracked only with new bot")
 }
 
 def normalize_status(s: str) -> str:
