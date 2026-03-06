@@ -13,7 +13,7 @@ from mangomods_bot.utils.misc import iso_now, pretty_dt
 
 STATUS_MAP = {
     "undetected": ("🟢", "Undetected — Safe to use"),
-    "risk": ("🟠", "Use at Own Risk — Bans Reported"),
+    "risk": ("🟠", "Use at Own Risk — Bans Reported."),
     "detected": ("🔴", "Detected — Do not use, Updating"),
     "testing": ("🔵", "Testing — Integrity testing in progress"),
 }
@@ -41,13 +41,16 @@ class StatusPanel(commands.GroupCog, name="status"):
             "ticket_panel": None,
             "status_panel": None
         })
+        self.updates = JSONStore("/data/updates.json", {"last_updated": {}})
 
     async def _is_staff(self, member: discord.Member) -> bool:
         return any(r.id == self.bot.config.staff_role_id for r in member.roles)
 
     async def _build_embed(self) -> discord.Embed:
-        data = await self.products.read()
+        data     = await self.products.read()
+        upd_data = await self.updates.read()
         products = data.get("products", {})
+        last_updated = upd_data.get("last_updated", {})
 
         emb = mango_embed(
             self.bot,
@@ -58,23 +61,43 @@ class StatusPanel(commands.GroupCog, name="status"):
         if not products:
             emb.add_field(name="No products yet", value="Staff can add products using `/addproduct`.", inline=False)
         else:
-            lines = []
-            # sort by display name
+            # ── Detection statuses ────────────────────────────────────────────
             items = sorted(products.items(), key=lambda kv: kv[1].get("name", kv[0]).lower())
+            status_lines = []
             for _, info in items:
                 name = info.get("name", "Unknown Product")
                 st = info.get("status", "testing")
                 emoji, label = STATUS_MAP.get(st, ("⚪", "Unknown"))
-                lines.append(f"{emoji} **{name}** — {label}")
-            emb.add_field(name="Current Status", value="\n".join(lines), inline=False)
+                status_lines.append(f"{emoji} **{name}** — {label}")
+            emb.add_field(name="Current Status", value="\n".join(status_lines), inline=False)
 
-        meta = data.get("meta", {})
+            # ── Divider + Last Updated ────────────────────────────────────────
+            lu_lines = []
+            for _, info in items:
+                name = info.get("name", "Unknown Product")
+                key  = name.strip().lower()
+                entry = last_updated.get(key)
+                if entry and entry.get("unix"):
+                    unix = entry["unix"]
+                    update_type = entry.get("update_type", "")
+                    type_tag = f" `{update_type}`" if update_type else ""
+                    lu_lines.append(f"**{name}**{type_tag} — <t:{unix}:R>")
+                else:
+                    lu_lines.append(f"**{name}** — *No updates posted yet*")
+
+            emb.add_field(
+                name="━━━━━━━━━━━━━━━━━━━━━━━━\n🕐  Last Updated",
+                value="\n".join(lu_lines),
+                inline=False,
+            )
+
+        meta  = data.get("meta", {})
         lu_by = meta.get("last_updated_by")
         lu_at = meta.get("last_updated_at")
         if lu_by and lu_at:
-            emb.set_footer(text=f"Last updated by {lu_by} on {pretty_dt(lu_at)}")
+            emb.set_footer(text=f"Status last changed by {lu_by} • {pretty_dt(lu_at)}")
         else:
-            emb.set_footer(text="Last updated by —")
+            emb.set_footer(text="MangoMods  •  Product Status")
 
         return emb
 
@@ -142,9 +165,7 @@ class StatusCommands(commands.Cog):
         await self.products.write(data)
 
     async def _refresh_status_panel(self) -> None:
-        cog = self.bot.get_cog("status")
-        # GroupCog name is class name unless overridden; discord.py uses class name by default.
-        # We added StatusPanel as a cog, so we can fetch by class name.
+        cog = self.bot.get_cog("status")  # GroupCog registered under name="status"
         if cog and hasattr(cog, "refresh_panel"):
             await cog.refresh_panel()  # type: ignore[attr-defined]
 
