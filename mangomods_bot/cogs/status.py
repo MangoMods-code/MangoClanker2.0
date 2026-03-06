@@ -33,11 +33,11 @@ class StatusPanel(commands.GroupCog, name="status"):
     """
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.products = JSONStore("data/products.json", {
+        self.products = JSONStore("/data/products.json", {
             "products": {},
             "meta": {"last_updated_by": None, "last_updated_at": None}
         })
-        self.panels = JSONStore("data/panels.json", {
+        self.panels = JSONStore("/data/panels.json", {
             "ticket_panel": None,
             "status_panel": None
         })
@@ -123,7 +123,7 @@ class StatusCommands(commands.Cog):
     """
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
-        self.products = JSONStore("data/products.json", {
+        self.products = JSONStore("/data/products.json", {
             "products": {},
             "meta": {"last_updated_by": None, "last_updated_at": None}
         })
