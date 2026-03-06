@@ -13,8 +13,8 @@ from mangomods_bot.utils.misc import iso_now, pretty_dt
 
 STATUS_MAP = {
     "undetected": ("🟢", "Undetected — Safe to use"),
-    "risk": ("🟠", "Use at Own Risk — Caution advised"),
-    "detected": ("🔴", "Detected — Do not use"),
+    "risk": ("🟠", "Use at Own Risk — Bans Reported"),
+    "detected": ("🔴", "Detected — Do not use, Updating"),
     "testing": ("🔵", "Testing — Integrity testing in progress"),
 }
 
