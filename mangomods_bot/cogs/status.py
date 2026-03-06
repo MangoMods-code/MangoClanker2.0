@@ -171,7 +171,7 @@ class StatusCommands(commands.Cog):
             await cog.refresh_panel()  # type: ignore[attr-defined]
 
     @app_commands.command(name="addproduct", description="Add a product to the status board.")
-    @app_commands.describe(name="Product name", status="undetected/risk/detected/testing")
+    @app_commands.describe(name="Product name", status="undetected/risk/detected/testing/revokes")
     async def addproduct(self, interaction: discord.Interaction, name: str, status: str):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Use this in a server.", ephemeral=True)
@@ -225,7 +225,7 @@ class StatusCommands(commands.Cog):
         await interaction.response.send_message("Product removed and panel updated.", ephemeral=True)
 
     @app_commands.command(name="updatestatus", description="Update a product's status on the status board.")
-    @app_commands.describe(product="Product name", status="undetected/risk/detected/testing")
+    @app_commands.describe(product="Product name", status="undetected/risk/detected/testing/revokes")
     async def updatestatus(self, interaction: discord.Interaction, product: str, status: str):
         if not interaction.guild or not isinstance(interaction.user, discord.Member):
             return await interaction.response.send_message("Use this in a server.", ephemeral=True)
