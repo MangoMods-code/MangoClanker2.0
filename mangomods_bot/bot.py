@@ -91,6 +91,7 @@ class MangoModsBot(commands.Bot):
         await self.load_extension("mangomods_bot.cogs.verification")
         await self.load_extension("mangomods_bot.cogs.promos")
         await self.load_extension("mangomods_bot.cogs.sticky")
+        await self.load_extension("mangomods_bot.cogs.updates")
 
 
         if self.config.guild_id:
