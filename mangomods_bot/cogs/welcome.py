@@ -11,7 +11,7 @@ from mangomods_bot.utils.log import log_action
 # Right-click the channel in Discord → "Copy Link"
 # Example: https://discord.com/channels/123456789012345678/987654321098765432
 # ─────────────────────────────────────────────────────────────────────────────
-TICKET_CHANNEL_URL = "https://discord.com/channels/GUILD_ID/CHANNEL_ID"
+TICKET_CHANNEL_URL = "https://discord.com/channels/1375602951384469586/1376587073707966535"
 
 
 class WelcomeView(discord.ui.View):
