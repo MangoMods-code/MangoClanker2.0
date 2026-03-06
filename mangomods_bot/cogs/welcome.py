@@ -78,7 +78,7 @@ class Welcome(commands.Cog):
                 value=(
                     f"› **Server:** {guild.name}\n"
                     f"› **Members:** {guild.member_count:,}\n"
-                    f"› **Website:** [{website}]({website})"
+                    f"› **Website:** {website}"
                 ),
                 inline=False,
             )
