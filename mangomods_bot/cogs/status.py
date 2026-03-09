@@ -16,7 +16,7 @@ STATUS_MAP = {
     "risk": ("🟠", "Use at Own Risk — Bans Reported"),
     "detected": ("🔴", "Detected — Do not use, Updating"),
     "testing": ("⚪️", "Testing — Integrity testing in progress"),
-    "revokes": ("🔵", "0/5 Revokes - These are tracked only with new bot")
+    "revokes": ("🔵", "0/7 Revokes - These are tracked only with new bot")
 }
 
 def normalize_status(s: str) -> str:
