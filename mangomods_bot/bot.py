@@ -92,6 +92,12 @@ class MangoModsBot(commands.Bot):
         await self.load_extension("mangomods_bot.cogs.promos")
         await self.load_extension("mangomods_bot.cogs.sticky")
         await self.load_extension("mangomods_bot.cogs.updates")
+        await self.load_extension("mangomods_bot.cogs.warnings")
+        await self.load_extension("mangomods_bot.cogs.userinfo")
+        await self.load_extension("mangomods_bot.cogs.giveaways")
+        await self.load_extension("mangomods_bot.cogs.invite_tracker")
+        await self.load_extension("mangomods_bot.cogs.role_buttons")
+        await self.load_extension("mangomods_bot.cogs.staff_activity")
 
 
         if self.config.guild_id:
