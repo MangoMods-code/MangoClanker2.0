@@ -52,26 +52,14 @@ class MangoModsBot(commands.Bot):
         self._presence_cycle: itertools.cycle[str] | None = None
 
     async def setup_hook(self) -> None:
-        # Dev-mode: wipe global commands to prevent stale duplicates
-        # Only do global wipe when you flip this to True manually (one-time cleanup)
-        DO_GLOBAL_WIPE = False
-
         SYNC = os.getenv("SYNC_COMMANDS_ON_STARTUP", "0") == "1"
-        if SYNC:
-            guild_obj = discord.Object(id=self.config.guild_id)
-            self.tree.copy_global_to(guild=guild_obj)
-            await self.tree.sync(guild=guild_obj)
-
-            
 
         # Persistent views
         self.add_view(TicketPanelView(self))
-
-        # Register ticket action views for all states (so buttons always work after restarts)
         self.add_view(TicketActionsView(self, locked=False, closed=False))
-        self.add_view(TicketActionsView(self, locked=True, closed=False))
+        self.add_view(TicketActionsView(self, locked=True,  closed=False))
         self.add_view(TicketActionsView(self, locked=False, closed=True))
-        self.add_view(TicketActionsView(self, locked=True, closed=True))
+        self.add_view(TicketActionsView(self, locked=True,  closed=True))
         self.add_view(RulesView(self))
         self.add_view(VerifyView(self))
 
@@ -99,17 +87,21 @@ class MangoModsBot(commands.Bot):
         await self.load_extension("mangomods_bot.cogs.role_buttons")
         await self.load_extension("mangomods_bot.cogs.staff_activity")
 
-
-        if self.config.guild_id:
-            guild_obj = discord.Object(id=self.config.guild_id)
-
-            # Fast sync: one call
-            self.tree.copy_global_to(guild=guild_obj)
-            await self.tree.sync(guild=guild_obj)
-
-            log.info("Synced commands to guild %s (dev mode).", self.config.guild_id)
+        # Sync slash commands — only when explicitly requested via env var.
+        # Syncing on every boot hits Discord rate limits and slows startup.
+        # Set SYNC_COMMANDS_ON_STARTUP=1 for one deploy after adding new commands,
+        # then set it back to 0.
+        if SYNC:
+            if self.config.guild_id:
+                guild_obj = discord.Object(id=self.config.guild_id)
+                self.tree.copy_global_to(guild=guild_obj)
+                await self.tree.sync(guild=guild_obj)
+                log.info("Synced commands to guild %s.", self.config.guild_id)
+            else:
+                await self.tree.sync()
+                log.info("Synced commands globally.")
         else:
-            await self.tree.sync()
+            log.info("Skipping command sync (SYNC_COMMANDS_ON_STARTUP=0).")
 
         self.start_presence_rotation()
 
