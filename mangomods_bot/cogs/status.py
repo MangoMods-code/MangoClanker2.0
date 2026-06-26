@@ -80,79 +80,97 @@ class StatusPanel(commands.GroupCog, name="status"):
         products = data.get("products", {})
         last_upd = upd_data.get("last_updated", {})
 
-        emb = mango_embed(
-            self.bot,
-            title="📌  MangoMods — Product Status",
-            description=(
-                f"Live detection status for all MangoMods products.\n"
-                f"**Website:** {self.bot.config.website_url}"
-            ),
+        # Overall embed colour — red if anything detected, gold otherwise
+        any_detected = any(
+            info.get("status") == "detected" for info in products.values()
+        )
+        embed_color = 0xED4245 if any_detected else 0xF9A826
+
+        emb = discord.Embed(
+            colour    = discord.Colour(embed_color),
+            timestamp = datetime.now(timezone.utc),
+        )
+
+        emb.set_author(
+            name     = "MangoMods — Live Product Status",
+            icon_url = self.bot.config.website_url or None,
         )
 
         if not products:
-            emb.add_field(
-                name="No products listed",
-                value="Staff can add products with `/addproduct`.",
-                inline=False,
-            )
+            emb.description = "No products listed yet. Staff can add products with `/addproduct`."
             emb.set_footer(text="MangoMods  •  Product Status")
             return emb
 
-        items = sorted(products.items(), key=lambda kv: kv[1].get("name", kv[0]).lower())
+        # ── Group products by status ──────────────────────────────────────────
+        # Order: undetected → risk → testing → revokes → detected
+        STATUS_ORDER = ["undetected", "risk", "testing", "revokes", "detected"]
 
-        for _, info in items:
-            name    = info.get("name",    "Unknown")
-            status  = info.get("status",  "testing")
-            version = info.get("version", "")
-            buyer_role_id = info.get("buyer_role_id")
+        grouped: dict[str, list[dict]] = {k: [] for k in STATUS_ORDER}
+        for info in products.values():
+            st = info.get("status", "testing")
+            grouped.setdefault(st, []).append(info)
 
-            emoji = _status_emoji(status)
-            label = _status_label(status)
+        # Sort each group alphabetically by product name
+        for st in grouped:
+            grouped[st].sort(key=lambda x: x.get("name", "").lower())
 
-            # Version tag
-            ver_tag = f"  `v{version}`" if version else ""
+        # ── Build one field per status group that has products ────────────────
+        total_products = len(products)
+        sections_built = 0
 
-            # Last updated
-            key   = name.strip().lower()
-            entry = last_upd.get(key)
-            if entry and entry.get("unix"):
-                lu_str = f"Updated <t:{entry['unix']}:R>"
-                if entry.get("update_type"):
-                    lu_str += f"  `{entry['update_type']}`"
-            else:
-                lu_str = "No updates posted yet"
+        for st in STATUS_ORDER:
+            items = grouped.get(st, [])
+            if not items:
+                continue
 
-            # Buyer role ping reference (shown as text, not a live ping)
-            role_str = ""
-            if buyer_role_id:
-                role = emb._footer  # just a check — fetch below if guild exists
-                role_str = ""  # resolved at ping time, not display time
+            emoji, label, _ = STATUS_MAP.get(st, ("⚪", "Unknown", 0))
 
-            emb.add_field(
-                name=f"{emoji}  {name}{ver_tag}",
-                value=f"{label}\n{lu_str}",
-                inline=True,
-            )
+            lines = []
+            for info in items:
+                name    = info.get("name", "Unknown")
+                version = info.get("version", "")
+                key_    = name.strip().lower()
+                entry   = last_upd.get(key_)
 
-        # Pad to even grid if odd number of products
-        if len(items) % 2 != 0:
-            emb.add_field(name="\u200b", value="\u200b", inline=True)
+                # Version tag
+                ver_str = f" `v{version}`" if version else ""
 
-        # ── Status key ────────────────────────────────────────────────────────
-        key_lines = [f"{e}  {l}" for _, (e, l, _) in STATUS_MAP.items()]
+                # Last updated — relative timestamp or fallback
+                if entry and entry.get("unix"):
+                    upd_type = entry.get("update_type", "")
+                    type_tag = f" `{upd_type}`" if upd_type else ""
+                    lu_str   = f"<t:{entry['unix']}:R>{type_tag}"
+                else:
+                    lu_str = "No updates yet"
+
+                lines.append(f"**{name}**{ver_str}  ·  {lu_str}")
+
+            field_name  = f"{emoji}  {label}  ({len(items)})"
+            field_value = "\n".join(lines)
+
+            emb.add_field(name=field_name, value=field_value, inline=False)
+            sections_built += 1
+
+        # ── Status key as a clean footer block ────────────────────────────────
+        key_parts = "  │  ".join(
+            f"{e} {k.title()}" for k, (e, _, __) in STATUS_MAP.items()
+        )
         emb.add_field(
-            name="━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nStatus Key",
-            value="\n".join(key_lines),
-            inline=False,
+            name  = "​",  # zero-width space — renders as a blank divider
+            value = f"-# {key_parts}",
+            inline= False,
         )
 
+        # ── Footer ────────────────────────────────────────────────────────────
         meta  = data.get("meta", {})
         lu_by = meta.get("last_updated_by")
         lu_at = meta.get("last_updated_at")
-        if lu_by and lu_at:
-            emb.set_footer(text=f"Last changed by {lu_by}  •  {pretty_dt(lu_at)}")
-        else:
-            emb.set_footer(text="MangoMods  •  Product Status")
+        footer_text = (
+            f"Last updated by {lu_by}  •  {pretty_dt(lu_at)}  •  {total_products} product(s)"
+            if lu_by and lu_at
+            else f"MangoMods  •  {total_products} product(s)  •  Live Status"
+        )
+        emb.set_footer(text=footer_text)
 
         return emb
 
