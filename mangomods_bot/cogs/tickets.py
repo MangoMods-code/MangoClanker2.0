@@ -330,7 +330,7 @@ class NoteModal(discord.ui.Modal, title="Add Staff Note"):
 
 # ── Cog ──────────────────────────────────────────────────────────────────────
 
-class Tickets(commands.GroupCog, name="ticket"):
+class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods ticket system — open, manage, and close support tickets."):
     """
     /ticket panel  — post the ticket panel (staff)
     /ticket note   — add a staff note to this ticket (staff)
