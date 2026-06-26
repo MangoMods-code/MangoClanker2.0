@@ -108,7 +108,7 @@ def mango_embed(
     footer_str = _footer_text(footer)
     emb.set_footer(
         text     = footer_str,
-        icon_url = logo or discord.Embed.Empty,
+        icon_url = logo or None,
     )
 
     # Optional thumbnail
@@ -119,7 +119,7 @@ def mango_embed(
     if author_name:
         emb.set_author(
             name     = author_name,
-            icon_url = (author_icon or logo) or discord.Embed.Empty,
+            icon_url = (author_icon or logo) or None,
         )
 
     return emb
