@@ -20,13 +20,24 @@ def _parse_milestones(raw: str) -> list[int]:
     out: list[int] = []
     for part in (raw or "").split(","):
         part = part.strip()
-        if not part:
-            continue
-        try:
-            out.append(int(part))
-        except Exception:
-            pass
-    return sorted(set([m for m in out if m > 0]))
+        if part:
+            try:
+                out.append(int(part))
+            except Exception:
+                pass
+    return sorted(set(m for m in out if m > 0))
+
+
+_FLAVOR_LINES = [
+    "The community keeps growing — thank you for being part of it. 🥭",
+    "Big W for MangoMods. More members, more wins.",
+    "This one's for the whole squad. Let's keep it going. 🔥",
+    "Another milestone, another reason to celebrate.",
+    "We started from nothing. Look at us now.",
+    "The support has been unreal. Thank you all. 🥭",
+    "MangoMods doesn't stop. Neither do you.",
+    "We built this together. That's what it's about.",
+]
 
 
 class Milestones(commands.Cog):
@@ -34,53 +45,14 @@ class Milestones(commands.Cog):
         self.bot = bot
         self.store = JSONStore("/data/milestones.json", {"last_milestone": 0})
 
-        self.channel_id = int(os.getenv("MILESTONE_CHANNEL_ID", "0") or "0")
-        self.ping_role_id = int(os.getenv("MILESTONE_PING_ROLE_ID", "0") or "0")
-        self.milestones = _parse_milestones(os.getenv("MILESTONE_LIST", "")) or [50, 100, 250, 500, 1000]
-
-    async def _post_milestone(self, guild: discord.Guild, milestone: int, humans: int) -> None:
-        if not self.channel_id:
-            return
-
-        ch = guild.get_channel(self.channel_id)
-        if ch is None:
-            try:
-                ch = await self.bot.fetch_channel(self.channel_id)
-            except Exception:
-                return
-
-        if not isinstance(ch, discord.TextChannel):
-            return
-
-        # fun lines (swap/add your own)
-        lines = [
-            "We’re growing fast — welcome to MangoMods 🍋",
-            "Big W for the community 🥭",
-            "More members, more wins. Let’s go!",
-            "Thanks for being here — we’re just getting started.",
-        ]
-        desc = (
-            f"### 🎉 Milestone Reached!\n"
-            f"We just hit **{milestone} members** (humans only).\n\n"
-            f"**Current count:** {humans}\n"
-            f"{random.choice(lines)}"
+        self.channel_id   = int(os.getenv("MILESTONE_CHANNEL_ID",    "0") or "0")
+        self.ping_role_id = int(os.getenv("MILESTONE_PING_ROLE_ID",  "0") or "0")
+        self.milestones   = (
+            _parse_milestones(os.getenv("MILESTONE_LIST", ""))
+            or [50, 100, 250, 500, 1000, 2500, 5000]
         )
 
-        emb = mango_embed(self.bot, title="🥭 MangoMods Milestone!", description=desc)
-        emb.add_field(name="Website", value=self.bot.config.website_url, inline=True)
-        emb.add_field(name="Next Goal", value=str(self._next_goal(milestone) or "—"), inline=True)
-        emb.set_footer(text="MangoMods • Thank you for the support!")
-        emb.timestamp = datetime.now(timezone.utc)
-
-        content = ""
-        if self.ping_role_id:
-            role = guild.get_role(self.ping_role_id)
-            if role:
-                content = role.mention
-
-        await ch.send(content=content, embed=emb)
-
-        await log_action(self.bot, "Milestone Celebrated", f"Guild: **{guild.name}**\nMilestone: **{milestone}**\nHumans: **{humans}**")
+    # ── Next goal helper ──────────────────────────────────────────────────────
 
     def _next_goal(self, current: int) -> int | None:
         for m in self.milestones:
@@ -88,42 +60,132 @@ class Milestones(commands.Cog):
                 return m
         return None
 
+    # ── Milestone post ────────────────────────────────────────────────────────
+
+    async def _post_milestone(
+        self, guild: discord.Guild, milestone: int, humans: int
+    ) -> None:
+        if not self.channel_id:
+            return
+
+        try:
+            ch = guild.get_channel(self.channel_id) or await self.bot.fetch_channel(self.channel_id)
+        except Exception:
+            return
+
+        if not isinstance(ch, discord.TextChannel):
+            return
+
+        next_goal = self._next_goal(milestone)
+
+        emb = mango_embed(
+            self.bot,
+            color   = "premium",
+            footer  = f"{milestone:,} Members Milestone",
+        )
+
+        # Author — guild name + icon
+        if guild.icon:
+            emb.set_author(name=guild.name, icon_url=guild.icon.url)
+        else:
+            emb.set_author(name=guild.name)
+
+        emb.title = f"🎉  {milestone:,} Members!"
+        emb.description = (
+            f"{random.choice(_FLAVOR_LINES)}\n\n"
+            f"We just hit **{milestone:,} members** in **{guild.name}**."
+        )
+
+        emb.add_field(
+            name="👥  Current Count",
+            value=f"**{humans:,}** humans",
+            inline=True,
+        )
+        emb.add_field(
+            name="🎯  Next Goal",
+            value=f"**{next_goal:,}** members" if next_goal else "The sky 🌌",
+            inline=True,
+        )
+        emb.add_field(
+            name="🌐  Website",
+            value=self.bot.config.website_url,
+            inline=True,
+        )
+
+        # Thumbnail — guild icon
+        if guild.icon:
+            emb.set_thumbnail(url=guild.icon.url)
+
+        # Banner — guild banner if available
+        if guild.banner:
+            emb.set_image(url=guild.banner.url)
+
+        emb.timestamp = datetime.now(timezone.utc)
+
+        # Ping role if configured
+        content = ""
+        if self.ping_role_id:
+            role = guild.get_role(self.ping_role_id)
+            if role:
+                content = role.mention
+
+        await ch.send(
+            content=content or None,
+            embed=emb,
+            allowed_mentions=discord.AllowedMentions(roles=True),
+        )
+
+        await log_action(
+            self.bot,
+            "Milestone Celebrated",
+            f"Guild: **{guild.name}**\nMilestone: **{milestone:,}**\nHumans: **{humans:,}**",
+        )
+
+    # ── Check and fire ────────────────────────────────────────────────────────
+
     async def check_milestones(self, guild: discord.Guild) -> None:
-        humans = _human_count(guild)
-        eligible = [m for m in self.milestones if m <= humans]
+        if not guild.chunked:
+            try:
+                await guild.chunk()
+            except Exception:
+                pass
+
+        humans    = _human_count(guild)
+        eligible  = [m for m in self.milestones if m <= humans]
         if not eligible:
             return
 
         newest = max(eligible)
-        data = await self.store.read()
-        last = int(data.get("last_milestone", 0))
+        data   = await self.store.read()
+        last   = int(data.get("last_milestone", 0))
 
-        # only fire once per milestone
         if newest <= last:
             return
 
-        # update first (prevents double-fire if two joins happen fast)
+        # Write first — prevents double-fire on rapid joins
         data["last_milestone"] = newest
         await self.store.write(data)
 
         await self._post_milestone(guild, newest, humans)
 
+    # ── Listeners ─────────────────────────────────────────────────────────────
+
     @commands.Cog.listener()
-    async def on_ready(self):
-        # Run once at startup (safe due to last_milestone)
-        guild = self.bot.get_guild(self.bot.config.guild_id) if self.bot.config.guild_id else (self.bot.guilds[0] if self.bot.guilds else None)
+    async def on_ready(self) -> None:
+        if not self.bot.config.guild_id:
+            return
+        guild = self.bot.get_guild(self.bot.config.guild_id)
         if guild:
             await self.check_milestones(guild)
 
     @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
+    async def on_member_join(self, member: discord.Member) -> None:
         await self.check_milestones(member.guild)
 
     @commands.Cog.listener()
-    async def on_member_remove(self, member: discord.Member):
-        # optional: you can also celebrate only on join; but this keeps state accurate
+    async def on_member_remove(self, member: discord.Member) -> None:
         await self.check_milestones(member.guild)
 
 
-async def setup(bot: commands.Bot):
+async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Milestones(bot))
