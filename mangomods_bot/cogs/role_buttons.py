@@ -324,7 +324,7 @@ class RoleButtons(commands.Cog):
         logo = _logo_url()
         emb.set_footer(
             text     = f"{brand}  •  {footer_suffix}",
-            icon_url = logo or discord.Embed.Empty,
+            icon_url = logo or None,
         )
 
         # Thumbnail
