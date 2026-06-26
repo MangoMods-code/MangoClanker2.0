@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 """
 cogs/role_buttons.py
 ────────────────────
@@ -595,9 +597,6 @@ class RoleButtons(commands.Cog):
 
         await interaction.followup.send(embed=emb, ephemeral=True)
 
-
-# Convenience import for Optional used in command signature
-from typing import Optional
 
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(RoleButtons(bot))
