@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import io
 import html
+import os
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any
 
@@ -17,6 +18,8 @@ from mangomods_bot.utils.misc import iso_now, pretty_dt, sanitize_channel_name, 
 from mangomods_bot.views.ticket_panel import TicketPanelView
 from mangomods_bot.views.ticket_actions import TicketActionsView
 from mangomods_bot.views.ticket_rating import TicketRatingView
+
+TICKET_LOG_CHANNEL_ID = int(os.getenv("TICKET_LOG_CHANNEL_ID", "0") or "0")
 
 
 # ── Priority configuration ───────────────────────────────────────────────────
@@ -367,6 +370,26 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
         except Exception:
             pass
 
+    async def _ticket_log(self, title: str, description: str) -> None:
+        """Post to TICKET_LOG_CHANNEL_ID. Falls back to main log if not set."""
+        ch_id = TICKET_LOG_CHANNEL_ID or self.bot.config.log_channel_id
+        if not ch_id:
+            return
+        try:
+            ch = self.bot.get_channel(ch_id) or await self.bot.fetch_channel(ch_id)
+            if not isinstance(ch, discord.TextChannel):
+                return
+            emb = discord.Embed(
+                title=title,
+                description=description,
+                colour=discord.Colour(0xF9A826),
+                timestamp=_now(),
+            )
+            emb.set_footer(text="MangoMods  •  Ticket Logs")
+            await ch.send(embed=emb)
+        except Exception:
+            pass
+
     def _staff_role(self, guild: discord.Guild) -> Optional[discord.Role]:
         return guild.get_role(self.bot.config.staff_role_id)
 
@@ -703,8 +726,7 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
             view=TicketActionsView(self.bot, locked=False, closed=False),
         )
 
-        await log_action(
-            self.bot,
+        await self._ticket_log(
             "Ticket Opened",
             f"Type: **{ticket_type}** | Priority: **{priority_label.strip()}**\n"
             f"User: {user.mention} (`{user.id}`)\n"
@@ -745,8 +767,7 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
         await interaction.channel.send(
             f"🏷️ Ticket claimed by {interaction.user.mention}."
         )
-        await log_action(
-            self.bot,
+        await self._ticket_log(
             "Ticket Claimed",
             f"Staff: {interaction.user.mention}\nChannel: {interaction.channel.mention}",
         )
@@ -791,8 +812,7 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
             member, view_channel=True, send_messages=True, read_message_history=True
         )
         await interaction.channel.send(f"➕ Added {member.mention} to this ticket.")
-        await log_action(
-            self.bot,
+        await self._ticket_log(
             "User Added To Ticket",
             f"Staff: {interaction.user.mention}\nAdded: {member.mention}\nChannel: {interaction.channel.mention}",
         )
@@ -848,8 +868,7 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
         })
         await self.ticket_store.write(data)
 
-        await log_action(
-            self.bot,
+        await self._ticket_log(
             "Staff Note Added",
             f"By {interaction.user.mention}\nChannel: {channel.mention}",
         )
@@ -881,8 +900,8 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
 
         await self._set_state(interaction.channel.id, {"locked": True})
         await self._refresh_controls(interaction, interaction.channel, locked=True, closed=closed)
-        await log_action(
-            self.bot, "Ticket Locked",
+        await self._ticket_log(
+            "Ticket Locked",
             f"By {interaction.user.mention}\nChannel: {interaction.channel.mention}",
         )
         await interaction.response.send_message("🔒 Ticket locked.", ephemeral=True)
@@ -908,8 +927,8 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
 
         await self._set_state(interaction.channel.id, {"locked": False})
         await self._refresh_controls(interaction, interaction.channel, locked=False, closed=closed)
-        await log_action(
-            self.bot, "Ticket Unlocked",
+        await self._ticket_log(
+            "Ticket Unlocked",
             f"By {interaction.user.mention}\nChannel: {interaction.channel.mention}",
         )
         await interaction.response.send_message("🔓 Ticket unlocked.", ephemeral=True)
@@ -969,8 +988,8 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
 
         await self._set_state(interaction.channel.id, {"closed": False, "locked": False, "closed_at": None})
         await self._refresh_controls(interaction, interaction.channel, locked=False, closed=False)
-        await log_action(
-            self.bot, "Ticket Reopened",
+        await self._ticket_log(
+            "Ticket Reopened",
             f"By {interaction.user.mention}\nChannel: {interaction.channel.mention}",
         )
         await interaction.response.send_message("✅ Ticket reopened.", ephemeral=True)
@@ -1156,8 +1175,7 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
         # Send rating DM to ticket owner
         asyncio.create_task(self._send_rating_dm(guild, owner_id, channel.id))
 
-        await log_action(
-            self.bot,
+        await self._ticket_log(
             "Ticket Closed",
             f"Closed by: {interaction.user.mention}\n"
             f"Channel: #{channel.name} (`{channel.id}`)\n"
@@ -1203,8 +1221,7 @@ class Tickets(commands.GroupCog, name="ticket", group_description="MangoMods tic
     async def record_rating(self, channel_id: int, rating: int) -> None:
         """Called by TicketRatingView when a user submits a star rating."""
         await self._set_state(channel_id, {"rating": rating})
-        await log_action(
-            self.bot,
+        await self._ticket_log(
             "Ticket Rated",
             f"Channel: <#{channel_id}>\nRating: **{'⭐' * rating}** ({rating}/5)",
         )
