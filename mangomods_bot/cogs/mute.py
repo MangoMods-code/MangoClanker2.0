@@ -380,6 +380,173 @@ class MuteCog(commands.Cog):
 
         await self._ephemeral(interaction, f"✅ Unmuted {member.mention}.\nReason: {pretty_reason}")
 
+    @app_commands.command(name="kick", description="Kick a member from the server. Staff only.")
+    @app_commands.describe(member="Member to kick", reason="Optional reason")
+    async def kick(self, interaction: discord.Interaction, member: discord.Member, reason: Optional[str] = None):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return await self._ephemeral(interaction, "Use this in a server.")
+        if not await self._is_staff(interaction.user):
+            return await self._ephemeral(interaction, "Staff only.")
+
+        await self._safe_defer(interaction)
+
+        if member.id == interaction.user.id:
+            return await self._ephemeral(interaction, "You can't kick yourself.")
+        if self._hierarchy_blocked(interaction.guild, member):
+            return await self._ephemeral(interaction, "I can't kick that member (role hierarchy).")
+
+        pretty_reason = reason.strip() if reason and reason.strip() else "No reason given."
+
+        # DM before kick so they can receive it
+        try:
+            emb = discord.Embed(
+                title="👢  You have been kicked",
+                colour=discord.Colour(0xF9A826),
+                timestamp=datetime.now(timezone.utc),
+            )
+            emb.add_field(name="Server", value=interaction.guild.name, inline=True)
+            emb.add_field(name="Reason", value=pretty_reason,          inline=False)
+            emb.set_footer(text="You may rejoin the server if you have an invite link.")
+            await member.send(embed=emb)
+        except Exception:
+            pass
+
+        try:
+            await interaction.guild.kick(member, reason=pretty_reason)
+        except discord.Forbidden:
+            return await self._ephemeral(interaction, "I don't have permission to kick that member.")
+        except Exception:
+            return await self._ephemeral(interaction, "Failed to kick member (unexpected error).")
+
+        await self._send_case_log(
+            action="kick",
+            moderator=interaction.user,
+            offender=member,
+            reason=pretty_reason,
+        )
+
+        await self._ephemeral(interaction, f"✅ Kicked {member.mention}.\nReason: {pretty_reason}")
+
+    @app_commands.command(name="softban", description="Ban then immediately unban to clear recent messages. Staff only.")
+    @app_commands.describe(member="Member to softban", delete_message_days="Days of messages to delete (1-7, default 7)", reason="Optional reason")
+    async def softban(self, interaction: discord.Interaction, member: discord.Member, delete_message_days: Optional[int] = 7, reason: Optional[str] = None):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return await self._ephemeral(interaction, "Use this in a server.")
+        if not await self._is_staff(interaction.user):
+            return await self._ephemeral(interaction, "Staff only.")
+
+        await self._safe_defer(interaction)
+
+        dmd = max(1, min(7, int(delete_message_days or 7)))
+
+        if member.id == interaction.user.id:
+            return await self._ephemeral(interaction, "You can't softban yourself.")
+        if self._hierarchy_blocked(interaction.guild, member):
+            return await self._ephemeral(interaction, "I can't softban that member (role hierarchy).")
+
+        pretty_reason = reason.strip() if reason and reason.strip() else "No reason given."
+
+        # DM before ban
+        try:
+            emb = discord.Embed(
+                title="🔨  You have been softbanned",
+                colour=discord.Colour(0xED4245),
+                timestamp=datetime.now(timezone.utc),
+            )
+            emb.add_field(name="Server", value=interaction.guild.name, inline=True)
+            emb.add_field(name="Reason", value=pretty_reason,          inline=False)
+            emb.set_footer(text="A softban removes your recent messages. You may rejoin with an invite link.")
+            await member.send(embed=emb)
+        except Exception:
+            pass
+
+        try:
+            await interaction.guild.ban(member, reason=f"Softban: {pretty_reason}", delete_message_days=dmd)
+            await interaction.guild.unban(member, reason="Softban — immediate unban")
+        except discord.Forbidden:
+            return await self._ephemeral(interaction, "I don't have permission to ban/unban that member.")
+        except Exception:
+            return await self._ephemeral(interaction, "Failed to softban member (unexpected error).")
+
+        await self._send_case_log(
+            action="softban",
+            moderator=interaction.user,
+            offender=member,
+            reason=pretty_reason,
+            extra={"Delete Msg Days": str(dmd)},
+        )
+
+        await self._ephemeral(interaction, f"✅ Softbanned {member.mention} (deleted {dmd}d of messages).\nReason: {pretty_reason}")
+
+    @app_commands.command(name="purge", description="Bulk delete messages in this channel. Staff only.")
+    @app_commands.describe(amount="Number of messages to delete (1-100)", member="Optional: only delete messages from this member")
+    async def purge(self, interaction: discord.Interaction, amount: int, member: Optional[discord.Member] = None):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return await self._ephemeral(interaction, "Use this in a server.")
+        if not await self._is_staff(interaction.user):
+            return await self._ephemeral(interaction, "Staff only.")
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return await self._ephemeral(interaction, "Use this in a text channel.")
+
+        amount = max(1, min(100, amount))
+
+        await interaction.response.defer(ephemeral=True, thinking=True)
+
+        check = (lambda m: m.author.id == member.id) if member else None
+
+        try:
+            deleted = await interaction.channel.purge(limit=amount, check=check, bulk=True)
+        except discord.Forbidden:
+            return await interaction.followup.send("I don't have permission to delete messages here.", ephemeral=True)
+        except Exception:
+            return await interaction.followup.send("Failed to purge messages (unexpected error).", ephemeral=True)
+
+        target_str = f" from {member.mention}" if member else ""
+        from mangomods_bot.utils.log import log_action
+        await log_action(
+            self.bot,
+            "Purge",
+            f"By {interaction.user.mention}\nChannel: {interaction.channel.mention}\nDeleted: **{len(deleted)}** message(s){target_str}",
+        )
+
+        await interaction.followup.send(
+            f"🗑️ Deleted **{len(deleted)}** message(s){target_str}.",
+            ephemeral=True,
+        )
+
+    @app_commands.command(name="slowmode", description="Set slowmode for this channel. Staff only.")
+    @app_commands.describe(seconds="Slowmode delay in seconds (0 to disable, max 21600)")
+    async def slowmode(self, interaction: discord.Interaction, seconds: int):
+        if not interaction.guild or not isinstance(interaction.user, discord.Member):
+            return await self._ephemeral(interaction, "Use this in a server.")
+        if not await self._is_staff(interaction.user):
+            return await self._ephemeral(interaction, "Staff only.")
+        if not isinstance(interaction.channel, discord.TextChannel):
+            return await self._ephemeral(interaction, "Use this in a text channel.")
+
+        seconds = max(0, min(21600, seconds))
+
+        try:
+            await interaction.channel.edit(slowmode_delay=seconds)
+        except discord.Forbidden:
+            return await self._ephemeral(interaction, "I don't have permission to edit this channel.")
+        except Exception:
+            return await self._ephemeral(interaction, "Failed to set slowmode (unexpected error).")
+
+        if seconds == 0:
+            msg = f"⏱️ Slowmode disabled in {interaction.channel.mention}."
+        else:
+            msg = f"⏱️ Slowmode set to **{seconds}s** in {interaction.channel.mention}."
+
+        from mangomods_bot.utils.log import log_action
+        await log_action(
+            self.bot,
+            "Slowmode Set",
+            f"By {interaction.user.mention}\nChannel: {interaction.channel.mention}\nDelay: **{seconds}s**",
+        )
+
+        await self._ephemeral(interaction, msg)
+
     @app_commands.command(name="ban", description="Ban a member. Owner role only.")
     @app_commands.describe(member="Member to ban", delete_message_days="Delete messages from last N days (0-7)", reason="Optional reason")
     async def ban(self, interaction: discord.Interaction, member: discord.Member, delete_message_days: Optional[int] = 0, reason: Optional[str] = None):
